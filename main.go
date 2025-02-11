@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"strings"
@@ -10,89 +11,92 @@ import (
 	"time"
 )
 
+type Client struct {
+	conn net.Conn
+	name string
+}
+
 var (
-	clients  = make(map[net.Conn]string)
-	messages = make(chan string)
+	clients  = make(map[net.Conn]Client)
+	messages = []string{}
 	mutex    = sync.Mutex{}
 )
 
 func main() {
-	port := "8989"
-	if len(os.Args) > 1 {
-		port = os.Args[1]
-	}
-	
-	ln, err := net.Listen("tcp", ":"+port)
+	port := ":8989"
+	ln, err := net.Listen("tcp", port)
 	if err != nil {
-		fmt.Println("Error starting server:", err)
-		return
+		log.Fatalf("Failed to start server: %v", err)
 	}
 	defer ln.Close()
-
-	fmt.Println("Listening on port:", port)
-
-	go broadcastMessages()
+	fmt.Println("Listening on port", port)
 
 	for {
-		if len(clients) >= 10 {
-			fmt.Println("Maximum clients reached.")
-			continue
-		}
-
 		conn, err := ln.Accept()
 		if err != nil {
-			fmt.Println("Error accepting connection:", err)
+			log.Println("Connection error:", err)
 			continue
 		}
-
-		go handleClient(conn)
+		if len(clients) >= 10 {
+			conn.Write([]byte("Server full. Try again later.\n"))
+			conn.Close()
+			continue
+		}
+		go handleConnection(conn)
 	}
 }
 
-func handleClient(conn net.Conn) {
+func handleConnection(conn net.Conn) {
 	defer conn.Close()
-	contint,_ := os.ReadFile("fil.txt")
-	fmt.Fprint(conn, "Welcome to TCP-Chat!\n")
-	fmt.Fprint(conn,string(contint))
-	fmt.Fprint(conn, "[Enter your name]: ")
+	conten, _ := os.ReadFile("fil.txt")
 
-	scanner := bufio.NewScanner(conn)
-	scanner.Scan()
-	name := scanner.Text()
-	if strings.TrimSpace(name) == "" {
-		fmt.Fprintln(conn, "Name cannot be empty. Closing connection.")
+	conn.Write([]byte("Welcome to TCP-Chat!\n" + string(conten) + "\n[ENTER YOUR NAME]: "))
+	name, _ := bufio.NewReader(conn).ReadString('\n')
+	name = strings.TrimSpace(name)
+	if name == "" {
+		conn.Write([]byte("Invalid name. Connection closed.\n"))
 		return
 	}
 
 	mutex.Lock()
-	clients[conn] = name
+	clients[conn] = Client{conn, name}
 	mutex.Unlock()
 
-	messages <- fmt.Sprintf("%s has joined the chat.", name)
-	fmt.Printf("%s joined the chat.\n", name)
+	broadcast(fmt.Sprintf("\n%s has joined the chat", name), conn)
+	conn.Write([]byte(strings.Join(messages, "\n") + "\n"))
 
-	for scanner.Scan() {
-		msg := scanner.Text()
-		if strings.TrimSpace(msg) == "" {
+	for {
+		formattedMsg0 := fmt.Sprintf("[%s][%s]:", time.Now().Format("2006-01-02 15:04:05"), name)
+
+		conn.Write([]byte(formattedMsg0 + " "))
+
+		msg, err := bufio.NewReader(conn).ReadString('\n')
+		if err != nil {
+			break
+		}
+		msg = strings.TrimSpace(msg)
+		if msg == "" {
 			continue
 		}
-		timestamp := time.Now().Format("2006-01-02 15:04:05")
-		messages <- fmt.Sprintf("[%s][%s]: %s", timestamp, name, msg)
+		formattedMsg := fmt.Sprintf("[%s][%s]: %s", time.Now().Format("2006-01-02 15:04:05"), name, msg)
+		mutex.Lock()
+		messages = append(messages, formattedMsg)
+		mutex.Unlock()
+		broadcast(formattedMsg, conn)
 	}
 
 	mutex.Lock()
 	delete(clients, conn)
 	mutex.Unlock()
-	messages <- fmt.Sprintf("%s has left the chat.", name)
-	fmt.Printf("%s left the chat.\n", name)
+	broadcast(fmt.Sprintf("%s has left the chat...", name), conn)
 }
 
-func broadcastMessages() {
-	for msg := range messages {
-		mutex.Lock()
-		for conn := range clients {
-			fmt.Fprintln(conn, msg)
+func broadcast(msg string, sender net.Conn) {
+	mutex.Lock()
+	defer mutex.Unlock()
+	for conn := range clients {
+		if conn != sender {
+			conn.Write([]byte(msg + "\n"))
 		}
-		mutex.Unlock()
 	}
 }
