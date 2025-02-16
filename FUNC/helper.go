@@ -17,7 +17,7 @@ var (
 	mutex    = sync.Mutex{}
 )
 
-func valdName(name string) bool {
+func valid(name string) bool {
 	for _, i := range name {
 		if !strings.ContainsRune("AZERTYUIOPQSDFGHJKLMWXCVBNazertyuiopqsdfghjklmwxcvbn", i) {
 			return false

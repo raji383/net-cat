@@ -15,7 +15,7 @@ func HandleConnection(conn net.Conn) {
 	conn.Write([]byte("Welcome to TCP-Chat!\n" + linuxLogo() + "\n[ENTER YOUR NAME]: "))
 	name, _ := reader.ReadString('\n')
 	name = strings.TrimSpace(name)
-	for !valdName(name) {
+	for !valid(name) || len(name) == 0 || len(name) > 10 {
 		conn.Write([]byte("Invalid name. Connection closed." + "\n[ENTER YOUR NAME]: "))
 		name, _ = reader.ReadString('\n')
 		name = strings.TrimSpace(name)
@@ -33,7 +33,7 @@ func HandleConnection(conn net.Conn) {
 		}
 		mutex.Unlock()
 
-		if duplicate || name == "" {
+		if duplicate {
 			conn.Write([]byte("Name already taken" + "\n[ENTER YOUR NAME]: "))
 			name, _ = reader.ReadString('\n')
 			name = strings.TrimSpace(name)
@@ -42,12 +42,11 @@ func HandleConnection(conn net.Conn) {
 		}
 		break
 	}
-
 	mutex.Lock()
 	Clients[conn] = Client{conn, name}
 	mutex.Unlock()
 
-	broadcast(fmt.Sprintf("%s has joined the chat", name), conn)
+	broadcast(fmt.Sprintf("%s has joined the chat\n", name), conn)
 	conn.Write([]byte(strings.Join(messages, "\n") + "\n"))
 
 	for {
@@ -61,10 +60,18 @@ func HandleConnection(conn net.Conn) {
 		if err != nil {
 			break
 		}
-		msg = strings.TrimSpace(msg)
-		if msg == "" {
-			continue
+		for valid(msg) || strings.TrimSpace(msg) == "" || len(msg) > 25 {
+			conn.Write([]byte("incorrect message\n"))
+			mutex.Lock()
+			conn.Write([]byte(formattedMsg0 + " "))
+			mutex.Unlock()
+			msg, err = reader.ReadString('\n')
+			if err != nil {
+				break
+			}
+
 		}
+
 		mutex.Lock()
 		messages = append(messages, formattedMsg0+msg)
 		mutex.Unlock()
@@ -74,5 +81,5 @@ func HandleConnection(conn net.Conn) {
 	mutex.Lock()
 	delete(Clients, conn)
 	mutex.Unlock()
-	broadcast(fmt.Sprintf("%s has left the chat...", name), conn)
+	broadcast(fmt.Sprintf("%s has left the chat...\n", name), conn)
 }

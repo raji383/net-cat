@@ -29,7 +29,7 @@ func main() {
 			log.Println("Connection error:", err)
 			continue
 		}
-		if len(netCat.Clients) > 9 {
+		if len(netCat.Clients) > 2 {
 			conn.Write([]byte("Server full. Try again later.\n"))
 			conn.Close()
 			continue
