@@ -15,8 +15,10 @@ func HandleConnection(conn net.Conn) {
 	conn.Write([]byte("Welcome to TCP-Chat!\n" + linuxLogo() + "\n[ENTER YOUR NAME]: "))
 	name, _ := reader.ReadString('\n')
 	name = strings.TrimSpace(name)
-	for !valid(name) || len(name) == 0 || len(name) > 10 {
+	for !valid(name)|| len(name)==0|| len(name)>10 {
+		mutex.Lock()
 		conn.Write([]byte("Invalid name. Connection closed." + "\n[ENTER YOUR NAME]: "))
+		mutex.Unlock()
 		name, _ = reader.ReadString('\n')
 		name = strings.TrimSpace(name)
 
@@ -33,11 +35,13 @@ func HandleConnection(conn net.Conn) {
 		}
 		mutex.Unlock()
 
-		if duplicate {
-			conn.Write([]byte("Name already taken" + "\n[ENTER YOUR NAME]: "))
+		if duplicate || len(name)==0 {
+			mutex.Lock()
+			conn.Write([]byte("Please provide another name" + "\n[ENTER YOUR NAME]: "))
+			mutex.Unlock()
 			name, _ = reader.ReadString('\n')
 			name = strings.TrimSpace(name)
-
+			
 			continue
 		}
 		break
@@ -51,7 +55,7 @@ func HandleConnection(conn net.Conn) {
 
 	for {
 		formattedMsg0 := fmt.Sprintf("[%s][%s]:", time.Now().Format("2006-01-02 15:04:05"), name)
-
+          
 		mutex.Lock()
 		conn.Write([]byte(formattedMsg0 + " "))
 		mutex.Unlock()
@@ -60,18 +64,21 @@ func HandleConnection(conn net.Conn) {
 		if err != nil {
 			break
 		}
-		for valid(msg) || strings.TrimSpace(msg) == "" || len(msg) > 25 {
-			conn.Write([]byte("incorrect message\n"))
+		for  !valid(msg) ||strings.TrimSpace(msg) == "" || len(msg) > 25  {
 			mutex.Lock()
+			conn.Write([]byte("incorrect message\n"))
 			conn.Write([]byte(formattedMsg0 + " "))
 			mutex.Unlock()
 			msg, err = reader.ReadString('\n')
-			if err != nil {
-				break
-			}
-
+		    if err != nil {
+			break
 		}
 
+
+
+			
+		}
+		
 		mutex.Lock()
 		messages = append(messages, formattedMsg0+msg)
 		mutex.Unlock()

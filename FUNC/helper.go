@@ -16,11 +16,12 @@ var (
 	messages = []string{}
 	mutex    = sync.Mutex{}
 )
-
 func valid(name string) bool {
 	for _, i := range name {
-		if !strings.ContainsRune("AZERTYUIOPQSDFGHJKLMWXCVBNazertyuiopqsdfghjklmwxcvbn", i) {
-			return false
+		if !strings.ContainsRune("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", i) {
+			if (i == '\x1b' || i == '[') {
+				return false
+			}
 		}
 	}
 	return true
